@@ -14,9 +14,8 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
     uint256 internal fee;
 
     string public prefixURI;
-    mapping (uint256 => uint256) public uriIds;
-    mapping (bytes32 => address) public requestIds;
-    uint256 public constant MAX_SUPPLY = 10000;
+    uint256 public constant MAX_SUPPLY = 9999;
+    uint256 public random;
     uint256[] public availableIds;
 
     constructor(
@@ -43,25 +42,45 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
     }
 
     /**
+     * Ask for a random number to chainlink vrf
+     */
+    function requestRandomness() public onlyOwner {
+        require(
+            LINK.balanceOf(address(this)) >= fee,
+            "Not enough LINK - fill contract with faucet"
+        );
+        requestRandomness(keyHash, fee);
+    }
+
+    /**
      * Mint for multiple addresses in a single transaction
      */
     function mintMultiple(address[] memory _to) external onlyOwner {
+        require(random != 0, "Can not mint if random not set");
         for (uint256 i; i < _to.length; i += 1) {
-            mint(_to[i]);
+            require(totalSupply() <= MAX_SUPPLY, "All nft already minted");
+            uint256 id = random % availableIds.length;
+            _safeMint(_to[i], availableIds[id]);
+            //update random and remove the minted id from available ids.
+            availableIds[id] = availableIds[availableIds.length - 1];
+            availableIds.pop();
+            random = uint256(keccak256(abi.encodePacked(random, i)));
         }
+        random = 0;
     }
 
     /**
      * Mint for 1 address
      */
-    function mint(address _to) public onlyOwner {
-        require(totalSupply() < MAX_SUPPLY, "All nft already minted");
-        require(
-            LINK.balanceOf(address(this)) >= fee,
-            "Not enough LINK - fill contract with faucet"
-        );
-        bytes32 requestId = requestRandomness(keyHash, fee);
-        requestIds[requestId] = _to;
+    function mint(address _to) external onlyOwner {
+        require(random != 0, "Can not mint if random not set");
+        require(totalSupply() <= MAX_SUPPLY, "All nft already minted");
+        uint256 id = random % availableIds.length;
+        _safeMint(_to, availableIds[id]);
+        //remove random and the minted id from available ids.
+        availableIds[id] = availableIds[availableIds.length - 1];
+        availableIds.pop();
+        random = 0;
     }
 
     /**
@@ -71,12 +90,7 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
         internal
         override
     {
-        address to = requestIds[requestId];
-        uint256 id = randomness % availableIds.length;
-        _safeMint(to, availableIds[id]);
-        //remove the minted id from available ids.
-        availableIds[id] = availableIds[availableIds.length - 1];
-        availableIds.pop();
+        random = randomness;
     }
 
     /**
