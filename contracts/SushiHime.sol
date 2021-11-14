@@ -19,13 +19,15 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
     uint256[] public availableIds;
 
     constructor(
+        address _vrf,
+        address _linkToken,
         string memory _prefixURI,
         uint256[] memory _availableIds //must have equal length than MAX_SUPPLY and go from 0 to MAX_SUPPLY - 1
     )
         ERC721("Sushi-Hime", "SHIME")
         VRFConsumerBase(
-            0x3d2341ADb2D31f1c5530cDC622016af293177AE0, //VRF Coordinator for polygon
-            0xb0897686c545045aFc77CF20eC7A532E3120E0F1 //LINK Token for polygon
+            _vrf, //0x3d2341ADb2D31f1c5530cDC622016af293177AE0 VRF Coordinator for polygon
+            _linkToken //0xb0897686c545045aFc77CF20eC7A532E3120E0F1 LINK Token for polygon
         )
     {
         keyHash = 0xf86195cf7690c55907b2b611ebb7343a6f649bff128701cc542f0569e2c549da; //key hash for polygon
