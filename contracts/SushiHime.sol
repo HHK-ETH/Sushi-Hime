@@ -36,6 +36,9 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
         setPrefixURI(_prefixURI);
     }
 
+    /**
+    * Init the array of available ids, can't do in contructor do to gas limit
+    */
     function addAvailableIds(uint256 _amount) public onlyOwner {
         for (uint256 i = 0; i < _amount; i+=1) {
             availableIds.push(availableIds.length);

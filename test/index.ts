@@ -31,9 +31,9 @@ describe("SushiHime", function () {
     );
     await sushiHime.deployed();
     linkToken.transfer(sushiHime.address, await linkToken.totalSupply());
-    await sushiHime.addAvailableIds(1_000);
-    await sushiHime.addAvailableIds(1_000);
-    await sushiHime.addAvailableIds(1_000);
+    for (let i = 0; i < 10; i += 1) {
+      await sushiHime.addAvailableIds(1_000);
+    }
   });
 
   it("Should not mint if not owner", async function () {
@@ -75,8 +75,9 @@ describe("SushiHime", function () {
   });
 
   it("Should not mint if max supply reached", async function () {
-    let i = 100;
-    while (i < 2500) {
+    this.timeout(100_000);
+    console.log("this test takes some time...");
+    for (let i = 100; i < 10_000; i += 100) {
       // fake request for randomness
       await sushiHime.preMint(Array(100).fill(user.address));
       await vrfCoordinator.callBackWithRandomness(
@@ -85,8 +86,16 @@ describe("SushiHime", function () {
         sushiHime.address
       );
       await sushiHime.mint();
-      i += 100;
     }
+    await sushiHime.preMint([user.address]);
+    await vrfCoordinator.callBackWithRandomness(
+      await sushiHime.lastRequestId(),
+      BigNumber.from(686856586),
+      sushiHime.address
+    );
+    await expect(sushiHime.connect(owner).mint()).to.be.revertedWith(
+      "SushiHime: MAX_SUPPLY"
+    );
   });
 
   it("Should update token uri", async function () {
