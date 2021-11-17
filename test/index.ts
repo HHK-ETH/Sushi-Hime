@@ -7,42 +7,96 @@ let owner: SignerWithAddress;
 let user: SignerWithAddress;
 let linkToken: Contract;
 let sushiHime: Contract;
+let vrfCoordinator: Contract;
 
 describe("SushiHime", function () {
   before("Deploy and setup contracts", async function () {
     [owner, user] = await ethers.getSigners();
-    const LinkToken = await ethers.getContractFactory("ERC20Mock");
-    linkToken = await LinkToken.connect(owner).deploy(
-      "LINK",
-      "LINK",
-      BigNumber.from(1000).mul(BigNumber.from(10).pow(18))
-    );
+
+    const LinkToken = await ethers.getContractFactory("LinkToken");
+    linkToken = await LinkToken.connect(owner).deploy();
     await linkToken.deployed();
+
+    const VRFCoordinator = await ethers.getContractFactory(
+      "VRFCoordinatorMock"
+    );
+    vrfCoordinator = await VRFCoordinator.deploy(linkToken.address);
+    await vrfCoordinator.deployed();
 
     const SushiHime = await ethers.getContractFactory("SushiHime");
     sushiHime = await SushiHime.deploy(
+      vrfCoordinator.address,
       linkToken.address,
-      owner.address,
-      "https://tokenuri.com/",
-      [0, 10000]
+      "https://tokenuri.com/"
     );
     await sushiHime.deployed();
     linkToken.transfer(sushiHime.address, await linkToken.totalSupply());
+    await sushiHime.addAvailableIds(1_000);
+    await sushiHime.addAvailableIds(1_000);
+    await sushiHime.addAvailableIds(1_000);
   });
 
   it("Should not mint if not owner", async function () {
-    await expect(
-      sushiHime.connect(user).mint(user.address)
-    ).to.be.revertedWith("Ownable: caller is not the owner");
-    await expect(
-      sushiHime.connect(user).mintMultiple([user.address])
-    ).to.be.revertedWith("Ownable: caller is not the owner");
+    await expect(sushiHime.connect(user).mint()).to.be.revertedWith(
+      "Ownable: caller is not the owner"
+    );
   });
 
-  it("Should not mint if no random", async function () {});
-  it("Should not mint if max supply reached", async function () {});
-  it("Should mint one nft", async function () {});
-  it("Should mint multiple nft", async function () {});
-  it("Should update token uri", async function () {});
-  it("Should not updated token uri if not owner", async function () {});
+  it("Should not mint if no random", async function () {
+    await expect(sushiHime.connect(owner).mint()).to.be.revertedWith(
+      "SushiHime: Random not set"
+    );
+  });
+
+  it("Should mint one nft", async function () {
+    const totalSupply = await sushiHime.totalSupply();
+    // fake request for randomness
+    await sushiHime.preMint([user.address]);
+    await vrfCoordinator.callBackWithRandomness(
+      await sushiHime.lastRequestId(),
+      BigNumber.from(686856586),
+      sushiHime.address
+    );
+    await sushiHime.mint();
+    expect(await sushiHime.totalSupply()).to.be.equal(totalSupply.add(1));
+  });
+
+  it("Should mint multiple nfts", async function () {
+    const totalSupply = await sushiHime.totalSupply();
+    // fake request for randomness
+    await sushiHime.preMint(Array(99).fill(user.address));
+    await vrfCoordinator.callBackWithRandomness(
+      await sushiHime.lastRequestId(),
+      BigNumber.from(686856586),
+      sushiHime.address
+    );
+    await sushiHime.mint();
+    expect(await sushiHime.totalSupply()).to.be.equal(totalSupply.add(99));
+  });
+
+  it("Should not mint if max supply reached", async function () {
+    let i = 100;
+    while (i < 2500) {
+      // fake request for randomness
+      await sushiHime.preMint(Array(100).fill(user.address));
+      await vrfCoordinator.callBackWithRandomness(
+        await sushiHime.lastRequestId(),
+        BigNumber.from(686856586),
+        sushiHime.address
+      );
+      await sushiHime.mint();
+      i += 100;
+    }
+  });
+
+  it("Should update token uri", async function () {
+    await sushiHime.setPrefixURI("https://thisistest.com/");
+    expect(await sushiHime.prefixURI()).to.be.equal("https://thisistest.com/");
+  });
+
+  it("Should not update token uri if not owner", async function () {
+    await expect(
+      sushiHime.connect(user).setPrefixURI("https://thisistest.com/")
+    ).to.be.revertedWith("Ownable: caller is not the owner");
+  });
 });
