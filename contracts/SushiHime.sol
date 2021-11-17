@@ -14,15 +14,16 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
     uint256 internal fee;
 
     string public prefixURI;
-    uint256 public constant MAX_SUPPLY = 9999;
-    uint256 public random;
-    uint256[] public availableIds;
+    bytes32 public lastRequestId;
+    address[] public addressesToMint;
+    uint256[] internal availableIds;
+    uint256 internal random;
+    uint256 public constant MAX_SUPPLY = 10000;
 
     constructor(
         address _vrf,
         address _linkToken,
-        string memory _prefixURI,
-        uint256[] memory _availableIds //must have equal length than MAX_SUPPLY and go from 0 to MAX_SUPPLY - 1
+        string memory _prefixURI
     )
         ERC721("Sushi-Hime", "SHIME")
         VRFConsumerBase(
@@ -33,7 +34,12 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
         keyHash = 0xf86195cf7690c55907b2b611ebb7343a6f649bff128701cc542f0569e2c549da; //key hash for polygon
         fee = 0.1 * 10**15; // 0.0001 LINK (on polygon)
         setPrefixURI(_prefixURI);
-        availableIds = _availableIds;
+    }
+
+    function addAvailableIds(uint256 _amount) public onlyOwner {
+        for (uint256 i = 0; i < _amount; i+=1) {
+            availableIds.push(availableIds.length);
+        }
     }
 
     /**
@@ -44,45 +50,36 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
     }
 
     /**
-     * Ask for a random number to chainlink vrf
+     * Ask for a random number to chainlink vrf and lock the addresses to mint
      */
-    function requestRandomness() public onlyOwner {
+    function preMint(address[] calldata _to) public onlyOwner {
         require(
             LINK.balanceOf(address(this)) >= fee,
-            "Not enough LINK - fill contract with faucet"
+            "SushiHime: Not enough LINK"
         );
-        requestRandomness(keyHash, fee);
+        require(
+            random == 0,
+            "SushiHime: random already set"
+        );
+        addressesToMint = _to;
+        lastRequestId = requestRandomness(keyHash, fee);
     }
 
     /**
-     * Mint for multiple addresses in a single transaction
+     * Mint for one or multiple addresses in a single transaction
      */
-    function mintMultiple(address[] memory _to) external onlyOwner {
-        require(random != 0, "Can not mint if random not set");
-        for (uint256 i; i < _to.length; i += 1) {
-            require(totalSupply() <= MAX_SUPPLY, "All nft already minted");
-            uint256 id = random % availableIds.length;
-            _safeMint(_to[i], availableIds[id]);
-            //update random and remove the minted id from available ids.
+    function mint() external onlyOwner {
+        require(random != 0, "SushiHime: Random not set");
+        require(totalSupply() + addressesToMint.length <= MAX_SUPPLY, "SushiHime: MAX_SUPPLY");
+        for (uint256 i; i < addressesToMint.length; i += 1) {
+            uint256 id = uint256(keccak256(abi.encodePacked(random, i))) % availableIds.length;
+            _safeMint(addressesToMint[i], availableIds[id]);
+            //remove the minted id from available ids.
             availableIds[id] = availableIds[availableIds.length - 1];
             availableIds.pop();
-            random = uint256(keccak256(abi.encodePacked(random, i)));
         }
         random = 0;
-    }
-
-    /**
-     * Mint for 1 address
-     */
-    function mint(address _to) external onlyOwner {
-        require(random != 0, "Can not mint if random not set");
-        require(totalSupply() <= MAX_SUPPLY, "All nft already minted");
-        uint256 id = random % availableIds.length;
-        _safeMint(_to, availableIds[id]);
-        //remove random and the minted id from available ids.
-        availableIds[id] = availableIds[availableIds.length - 1];
-        availableIds.pop();
-        random = 0;
+        delete addressesToMint; //save gas
     }
 
     /**
@@ -106,9 +103,10 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
     {
         require(
             _exists(_tokenId),
-            "ERC721Metadata: URI query for nonexistent token"
+            "ERC721Metadata: nonexistent token"
         );
-        return string(abi.encodePacked(prefixURI, _tokenId.toString(), ".json"));
+        return
+            string(abi.encodePacked(prefixURI, _tokenId.toString(), ".json"));
     }
 
     /**
@@ -117,5 +115,4 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
     function setPrefixURI(string memory _prefixURI) public onlyOwner {
         prefixURI = _prefixURI;
     }
-
 }
