@@ -112,4 +112,12 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
     function setPrefixURI(string memory _prefixURI) public onlyOwner {
         prefixURI = _prefixURI;
     }
+    
+    /**
+     * Withdraw MATIC
+     */
+    function withdrawMaticTokens() external onlyOwner {
+        (bool success,) = payable(owner()).call{value: address(this).balance}("");
+        require(success, "SushiHime: transfer failed");
+    }
 }
