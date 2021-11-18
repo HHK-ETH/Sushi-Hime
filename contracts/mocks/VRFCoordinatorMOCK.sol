@@ -2,6 +2,7 @@ pragma solidity ^0.8.0;
 
 import "@chainlink/contracts/src/v0.8/interfaces/LinkTokenInterface.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBase.sol";
+import "hardhat/console.sol";
 
 contract VRFCoordinatorMock {
 

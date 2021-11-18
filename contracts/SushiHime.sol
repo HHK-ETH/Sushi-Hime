@@ -14,16 +14,20 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
     uint256 internal fee;
 
     string public prefixURI;
+
+    uint256[] internal unclaimedNfts;
+    mapping (bytes32 => address) internal mintRequests;
     bytes32 public lastRequestId;
-    address[] public addressesToMint;
-    uint256[] internal availableIds;
-    uint256 internal random;
-    uint256 public constant MAX_SUPPLY = 10000;
+    uint256 public immutable MAX_SUPPLY;
+    uint256 public immutable PRICE;
+    bool public frozen = true;
 
     constructor(
         address _vrf,
         address _linkToken,
-        string memory _prefixURI
+        string memory _prefixURI,
+        uint256 _maxSupply,
+        uint256 _price
     )
         ERC721("Sushi-Hime", "SHIME")
         VRFConsumerBase(
@@ -34,15 +38,8 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
         keyHash = 0xf86195cf7690c55907b2b611ebb7343a6f649bff128701cc542f0569e2c549da; //key hash for polygon
         fee = 0.1 * 10**15; // 0.0001 LINK (on polygon)
         setPrefixURI(_prefixURI);
-    }
-
-    /**
-    * Init the array of available ids, can't do in contructor do to gas limit
-    */
-    function addAvailableIds(uint256 _amount) public onlyOwner {
-        for (uint256 i = 0; i < _amount; i+=1) {
-            availableIds.push(availableIds.length);
-        }
+        MAX_SUPPLY = _maxSupply;
+        PRICE = _price;
     }
 
     /**
@@ -53,36 +50,29 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
     }
 
     /**
-     * Ask for a random number to chainlink vrf and lock the addresses to mint
+     * Create nft ids array to unfreeze the contract.
      */
-    function preMint(address[] calldata _to) public onlyOwner {
-        require(
-            LINK.balanceOf(address(this)) >= fee,
-            "SushiHime: Not enough LINK"
-        );
-        require(
-            random == 0,
-            "SushiHime: random already set"
-        );
-        addressesToMint = _to;
-        lastRequestId = requestRandomness(keyHash, fee);
+    function prepare(uint256 amount) external onlyOwner {
+        for (uint256 i = 0; i < amount; i += 1) {
+            uint256 id = unclaimedNfts.length;
+            unclaimedNfts.push(id);
+        }
+        if (unclaimedNfts.length == MAX_SUPPLY) frozen = false;
     }
 
     /**
      * Mint for one or multiple addresses in a single transaction
      */
-    function mint() external onlyOwner {
-        require(random != 0, "SushiHime: Random not set");
-        require(totalSupply() + addressesToMint.length <= MAX_SUPPLY, "SushiHime: MAX_SUPPLY");
-        for (uint256 i; i < addressesToMint.length; i += 1) {
-            uint256 id = uint256(keccak256(abi.encodePacked(random, i))) % availableIds.length;
-            _safeMint(addressesToMint[i], availableIds[id]);
-            //remove the minted id from available ids.
-            availableIds[id] = availableIds[availableIds.length - 1];
-            availableIds.pop();
-        }
-        random = 0;
-        delete addressesToMint; //save gas
+    function mint() external payable {
+        require(frozen == false, "SushiHime: Finish preparation first");
+        require(unclaimedNfts.length > 0, "SushiHime: Nothing left to mint");
+        uint price = PRICE;
+        if (msg.sender == owner()) price = 0 ether; //free for owner (airdrop)
+        require(msg.value >= price, "SushiHime: Price invalid");
+        require(LINK.balanceOf(address(this)) >= fee, "SushiHime: Not enough LINK");
+        bytes32 requestId = requestRandomness(keyHash, fee);
+        lastRequestId = requestId;
+        mintRequests[requestId] = msg.sender;
     }
 
     /**
@@ -92,7 +82,11 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
         internal
         override
     {
-        random = randomness;
+        uint256 id = randomness % unclaimedNfts.length;
+        _mint(mintRequests[requestId], unclaimedNfts[id]);
+        unclaimedNfts[id] = unclaimedNfts[unclaimedNfts.length - 1];
+        unclaimedNfts.pop();
+        delete mintRequests[requestId]; //save gas
     }
 
     /**
