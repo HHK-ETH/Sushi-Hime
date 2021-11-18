@@ -1,6 +1,7 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
 import { BigNumber, Contract } from "ethers";
+import { parseUnits } from "ethers/lib/utils";
 import { ethers } from "hardhat";
 
 let owner: SignerWithAddress;
@@ -27,74 +28,62 @@ describe("SushiHime", function () {
     sushiHime = await SushiHime.deploy(
       vrfCoordinator.address,
       linkToken.address,
-      "https://tokenuri.com/"
+      "https://tokenuri.com/",
+      BigNumber.from(2_000),
+      parseUnits("3", "ether")
     );
     await sushiHime.deployed();
     linkToken.transfer(sushiHime.address, await linkToken.totalSupply());
-    for (let i = 0; i < 10; i += 1) {
-      await sushiHime.addAvailableIds(1_000);
-    }
   });
 
-  it("Should not mint if not owner", async function () {
+  it("Should not mint if not unfrozen", async function () {
     await expect(sushiHime.connect(user).mint()).to.be.revertedWith(
-      "Ownable: caller is not the owner"
+      "SushiHime: Finish preparation first"
     );
   });
 
-  it("Should not mint if no random", async function () {
-    await expect(sushiHime.connect(owner).mint()).to.be.revertedWith(
-      "SushiHime: Random not set"
-    );
+  it("Should preMint everything", async function () {
+    console.log("this test takes some time...");
+    for (let i = 0; i < 2_000; i += 500) {
+      await sushiHime.prepare(500);
+    }
+    expect(await sushiHime.frozen()).to.be.equal(false);
   });
 
   it("Should mint one nft", async function () {
-    const totalSupply = await sushiHime.totalSupply();
+    const userBalance = await sushiHime.balanceOf(user.address);
     // fake request for randomness
-    await sushiHime.preMint([user.address]);
+    await sushiHime.connect(user).mint({ value: parseUnits("3", "ether") });
     await vrfCoordinator.callBackWithRandomness(
       await sushiHime.lastRequestId(),
       BigNumber.from(686856586),
       sushiHime.address
     );
-    await sushiHime.mint();
-    expect(await sushiHime.totalSupply()).to.be.equal(totalSupply.add(1));
+    expect(await sushiHime.balanceOf(user.address)).to.be.equal(
+      userBalance.add(1)
+    );
   });
 
-  it("Should mint multiple nfts", async function () {
-    const totalSupply = await sushiHime.totalSupply();
-    // fake request for randomness
-    await sushiHime.preMint(Array(99).fill(user.address));
-    await vrfCoordinator.callBackWithRandomness(
-      await sushiHime.lastRequestId(),
-      BigNumber.from(686856586),
-      sushiHime.address
-    );
-    await sushiHime.mint();
-    expect(await sushiHime.totalSupply()).to.be.equal(totalSupply.add(99));
+  it("Should not mint if send less than price", async function () {
+    await expect(
+      sushiHime.connect(user).mint({ value: parseUnits("2", "ether") })
+    ).to.be.revertedWith("SushiHime: Price invalid");
   });
 
   it("Should not mint if max supply reached", async function () {
     this.timeout(100_000);
     console.log("this test takes some time...");
-    for (let i = 100; i < 10_000; i += 100) {
-      // fake request for randomness
-      await sushiHime.preMint(Array(100).fill(user.address));
+    for (let i = 1; i < 2_000; i += 1) {
+      await sushiHime.connect(owner).mint();
       await vrfCoordinator.callBackWithRandomness(
         await sushiHime.lastRequestId(),
         BigNumber.from(686856586),
         sushiHime.address
       );
-      await sushiHime.mint();
     }
-    await sushiHime.preMint([user.address]);
-    await vrfCoordinator.callBackWithRandomness(
-      await sushiHime.lastRequestId(),
-      BigNumber.from(686856586),
-      sushiHime.address
-    );
+
     await expect(sushiHime.connect(owner).mint()).to.be.revertedWith(
-      "SushiHime: MAX_SUPPLY"
+      "SushiHime: Nothing left to mint"
     );
   });
 
