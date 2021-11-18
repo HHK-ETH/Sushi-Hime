@@ -38,7 +38,7 @@ describe("SushiHime", function () {
   });
 
   it("Should not mint if not unfrozen", async function () {
-    await expect(sushiHime.connect(user).mint()).to.be.revertedWith(
+    await expect(sushiHime.connect(user).mint(user.address)).to.be.revertedWith(
       "SushiHime: Finish preparation first"
     );
   });
@@ -54,7 +54,9 @@ describe("SushiHime", function () {
   it("Should mint one nft", async function () {
     const userBalance = await sushiHime.balanceOf(user.address);
     // fake request for randomness
-    await sushiHime.connect(user).mint({ value: parseUnits("3", "ether") });
+    await sushiHime
+      .connect(user)
+      .mint(user.address, { value: parseUnits("3", "ether") });
     await vrfCoordinator.callBackWithRandomness(
       await sushiHime.lastRequestId(),
       BigNumber.from(686856586),
@@ -67,7 +69,9 @@ describe("SushiHime", function () {
 
   it("Should not mint if send less than price", async function () {
     await expect(
-      sushiHime.connect(user).mint({ value: parseUnits("2", "ether") })
+      sushiHime
+        .connect(user)
+        .mint(user.address, { value: parseUnits("2", "ether") })
     ).to.be.revertedWith("SushiHime: Price invalid");
   });
 
@@ -75,7 +79,7 @@ describe("SushiHime", function () {
     this.timeout(100_000);
     console.log("this test takes some time...");
     for (let i = 1; i < 2_000; i += 1) {
-      await sushiHime.connect(owner).mint();
+      await sushiHime.connect(owner).mint(owner.address);
       await vrfCoordinator.callBackWithRandomness(
         await sushiHime.lastRequestId(),
         BigNumber.from(686856586),
@@ -83,9 +87,9 @@ describe("SushiHime", function () {
       );
     }
 
-    await expect(sushiHime.connect(owner).mint()).to.be.revertedWith(
-      "SushiHime: Nothing left to mint"
-    );
+    await expect(
+      sushiHime.connect(owner).mint(owner.address)
+    ).to.be.revertedWith("SushiHime: Nothing left to mint");
   });
 
   it("Should update token uri", async function () {

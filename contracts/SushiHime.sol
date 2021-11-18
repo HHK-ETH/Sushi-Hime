@@ -64,7 +64,7 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
     /**
      * Mint for one or multiple addresses in a single transaction
      */
-    function mint() external payable {
+    function mint(address _to) external payable {
         require(frozen == false, "SushiHime: Finish preparation first");
         require(unclaimedNfts.length > 0, "SushiHime: Nothing left to mint");
         uint price = PRICE;
@@ -73,7 +73,7 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
         require(LINK.balanceOf(address(this)) >= fee, "SushiHime: Not enough LINK");
         bytes32 requestId = requestRandomness(keyHash, fee);
         lastRequestId = requestId;
-        mintRequests[requestId] = msg.sender;
+        mintRequests[requestId] = _to;
     }
 
     /**
