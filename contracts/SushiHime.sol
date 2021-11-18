@@ -25,6 +25,7 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
     constructor(
         address _vrf,
         address _linkToken,
+        bytes32 _keyHash,
         string memory _prefixURI,
         uint256 _maxSupply,
         uint256 _price
@@ -35,7 +36,7 @@ contract SushiHime is Ownable, VRFConsumerBase, ERC721Enumerable {
             _linkToken //0xb0897686c545045aFc77CF20eC7A532E3120E0F1 LINK Token for polygon
         )
     {
-        keyHash = 0xf86195cf7690c55907b2b611ebb7343a6f649bff128701cc542f0569e2c549da; //key hash for polygon
+        keyHash = _keyHash; //key hash for polygon
         fee = 0.1 * 10**15; // 0.0001 LINK (on polygon)
         setPrefixURI(_prefixURI);
         MAX_SUPPLY = _maxSupply;

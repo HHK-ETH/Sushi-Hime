@@ -28,6 +28,7 @@ describe("SushiHime", function () {
     sushiHime = await SushiHime.deploy(
       vrfCoordinator.address,
       linkToken.address,
+      "0xf86195cf7690c55907b2b611ebb7343a6f649bff128701cc542f0569e2c549da",
       "https://tokenuri.com/",
       BigNumber.from(2_000),
       parseUnits("3", "ether")
