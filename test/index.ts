@@ -15,7 +15,7 @@ describe("SushiHime", function () {
     [owner, user] = await ethers.getSigners();
 
     const LinkToken = await ethers.getContractFactory("LinkToken");
-    linkToken = await LinkToken.connect(owner).deploy();
+    linkToken = await LinkToken.deploy();
     await linkToken.deployed();
 
     const VRFCoordinator = await ethers.getContractFactory(
@@ -96,5 +96,18 @@ describe("SushiHime", function () {
     await expect(
       sushiHime.connect(user).setPrefixURI("https://thisistest.com/")
     ).to.be.revertedWith("Ownable: caller is not the owner");
+  });
+
+  it("Should not withdraw matic if not owner", async function () {
+    await expect(
+      sushiHime.connect(user).withdrawMaticTokens()
+    ).to.be.revertedWith("Ownable: caller is not the owner");
+  });
+
+  it("Should withdraw matic", async function () {
+    await sushiHime.connect(owner).withdrawMaticTokens();
+    expect(await ethers.provider.getBalance(sushiHime.address)).to.be.equal(
+      BigNumber.from(0)
+    );
   });
 });
